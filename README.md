@@ -1,10 +1,10 @@
 # re 🔖
 
 [![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](http://pkg.go.dev/github.com/benpate/re)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/benpate/re/go.yml?branch=main)](https://github.com/benpate/re/actions/workflows/go.yml)
-[![Codecov](https://img.shields.io/codecov/c/github/benpate/re.svg?style=flat-square)](https://codecov.io/gh/benpate/re)
-[![Go Report Card](https://goreportcard.com/badge/github.com/benpate/re?style=flat-square)](https://goreportcard.com/report/github.com/benpate/re)
 [![Version](https://img.shields.io/github/v/release/benpate/re?include_prereleases&style=flat-square&color=brightgreen)](https://github.com/benpate/re/releases)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/benpate/re/go.yml?branch=main)](https://github.com/benpate/re/actions/workflows/go.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/benpate/re?style=flat-square)](https://goreportcard.com/report/github.com/benpate/re)
+[![Codecov](https://img.shields.io/codecov/c/github/benpate/re.svg?style=flat-square)](https://codecov.io/gh/benpate/re)
 
 
 In some circumstances, it's necessary to us a Golang [io.Reader](https://pkg.go.dev/io#Reader) multiple times.  While readers themselves don't support this, we can fake it by copying the value into a buffer and then replaying the values whenever asked.
