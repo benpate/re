@@ -34,3 +34,13 @@ func TestRead(t *testing.T) {
 		require.Equal(t, "Hello World", string(third))
 	}
 }
+
+func TestRead_Error(t *testing.T) {
+
+	// Create a sample request
+	request, err := http.NewRequest("GET", "https://test.com", errorReader{})
+	require.Nil(t, err)
+
+	_, err = ReadBody(request)
+	require.Error(t, err)
+}
