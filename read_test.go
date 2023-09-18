@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRead(t *testing.T) {
+func TestReadRequest(t *testing.T) {
 
 	// Create a sample request
 	body := bytes.NewReader([]byte("Hello World"))
@@ -17,13 +17,13 @@ func TestRead(t *testing.T) {
 	require.Nil(t, err)
 
 	{
-		first, err := ReadBody(request)
+		first, err := ReadRequestBody(request)
 		require.Nil(t, err)
 		require.Equal(t, []byte("Hello World"), first)
 	}
 
 	{
-		second, err := ReadBody(request)
+		second, err := ReadRequestBody(request)
 		require.Nil(t, err)
 		require.Equal(t, "Hello World", string(second))
 	}
@@ -35,12 +35,51 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func TestRead_Error(t *testing.T) {
+func TestReadResponse(t *testing.T) {
+
+	// Create a sample request
+	body := bytes.NewReader([]byte("Hello World"))
+	response := http.Response{}
+	response.Body = io.NopCloser(body)
+
+	{
+		first, err := ReadResponseBody(&response)
+		require.Nil(t, err)
+		require.Equal(t, []byte("Hello World"), first)
+	}
+
+	{
+		second, err := ReadResponseBody(&response)
+		require.Nil(t, err)
+		require.Equal(t, "Hello World", string(second))
+	}
+
+	{
+		third, err := io.ReadAll(response.Body)
+		require.Nil(t, err)
+		require.Equal(t, "Hello World", string(third))
+	}
+}
+
+func TestReadRequest_Error(t *testing.T) {
 
 	// Create a sample request
 	request, err := http.NewRequest("GET", "https://test.com", errorReader{})
 	require.Nil(t, err)
 
-	_, err = ReadBody(request)
+	result, err := ReadRequestBody(request)
 	require.Error(t, err)
+	require.Equal(t, []byte{}, result)
+}
+
+func TestReadResponse_Error(t *testing.T) {
+
+	// Create a sample request
+	response := http.Response{
+		Body: io.NopCloser(errorReader{}),
+	}
+
+	result, err := ReadResponseBody(&response)
+	require.Error(t, err)
+	require.Equal(t, []byte{}, result)
 }
