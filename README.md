@@ -37,14 +37,14 @@ func readAndPrint(r io.Reader) {
 	
 ```
 
-## Read an http.Request Body Multiple Times
+## Read the Body from an http.Request or http.Response
 
-Since the primary use case for this library is to read HTTP Request bodies multiple times, it includes a helper function to simplify this process for you.  This helper *should be* compatible with other software that expects a regular `http.Request`, but it shims a re.Reader in to the `request.Body` value when necessary.
+This library also includes helper functions to read from [`http.Request`](https://pkg.go.dev/net/http#Request) and [`http.Response`](https://pkg.go.dev/net/http#Response) bodies. These functions do not use a re.Reader, but simply read the existing Body reader then replace it with a fresh reader that can be read again by another process.
 
 
 ```go
 func handler(request *http.Request) {
-	body, err := re.ReadBody(request)
+	body, err := re.ReadRequestBody(request)
 }
 ```
 
