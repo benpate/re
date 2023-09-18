@@ -15,7 +15,7 @@ func ReadRequestBody(request *http.Request) ([]byte, error) {
 	originalBytes, err := io.ReadAll(request.Body)
 
 	if err != nil {
-		return []byte{}, derp.Wrap(err, "re.ReadBody", "Error reading request body")
+		return []byte{}, derp.Wrap(err, "re.ReadRequestBody", "Error reading request body")
 	}
 
 	request.Body = io.NopCloser(bytes.NewReader(originalBytes))
@@ -34,7 +34,7 @@ func ReadResponseBody(response *http.Response) ([]byte, error) {
 	originalBytes, err := io.ReadAll(response.Body)
 
 	if err != nil {
-		return []byte{}, derp.Wrap(err, "re.ReadBody", "Error reading response body")
+		return []byte{}, derp.Wrap(err, "re.ReadResponseBody", "Error reading response body")
 	}
 
 	response.Body = io.NopCloser(bytes.NewReader(originalBytes))
