@@ -27,7 +27,7 @@ func NewReader(input io.Reader) (Reader, error) {
 	result.buffer, err = io.ReadAll(input)
 
 	if err != nil {
-		return result, derp.Wrap(err, "re.NewReader", "Error reading input")
+		return result, derp.Wrap(err, "re.NewReader", "Error reading input", derp.WithInternalError())
 	}
 
 	return result, nil
