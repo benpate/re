@@ -41,3 +41,12 @@ func ReadResponseBody(response *http.Response) ([]byte, error) {
 
 	return originalBytes, nil
 }
+
+// CloneResponse makes an exact copy of a response WITHOUT closing
+// the original response body.
+func CloneResponse(original *http.Response) http.Response {
+	clone := *original
+	originalBytes, _ := ReadResponseBody(original)
+	clone.Body = io.NopCloser(bytes.NewReader(originalBytes))
+	return clone
+}
