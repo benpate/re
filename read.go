@@ -12,6 +12,16 @@ import (
 // it with a new reader that can be read again by another process
 func ReadRequestBody(request *http.Request) ([]byte, error) {
 
+	// Request cannot be nil
+	if request == nil {
+		return []byte{}, nil
+	}
+
+	// If request.Body is nil, then return an empty byte array
+	if request.Body == nil {
+		return []byte{}, nil
+	}
+
 	originalBytes, err := io.ReadAll(request.Body)
 
 	if err != nil {
