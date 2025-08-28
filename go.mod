@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/benpate/derp v0.32.2
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
