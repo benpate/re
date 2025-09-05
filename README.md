@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/benpate/re?style=flat-square)](https://goreportcard.com/report/github.com/benpate/re)
 [![Codecov](https://img.shields.io/codecov/c/github/benpate/re.svg?style=flat-square)](https://codecov.io/gh/benpate/re)
 
-
+## Re-Reader for Go
 In some circumstances, it's necessary to us a Golang [io.Reader](https://pkg.go.dev/io#Reader) multiple times.  While readers themselves don't support this, we can fake it by copying the value into a buffer and then replaying the values whenever asked.
 
 **WARNING:** This library uses more resources than a regular reader.  In particular, it's a bad idea to use this for very large values (because it keeps the whole dataset in memory) or long running streaming readers (because it reads and replays the entire value).  It should only be used when the data is small and you reasonably believe you will need to use the reader a second time.
