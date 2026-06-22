@@ -52,9 +52,10 @@ func drainInChunks(t *testing.T, r io.Reader, bufSize int) []byte {
 	t.Helper()
 
 	var collected []byte
-	p := make([]byte, bufSize)
 
-	for {
+	// The buffer is allocated once in the loop's init clause and reused across
+	// iterations (a fresh allocation per iteration would be wasteful).
+	for p := make([]byte, bufSize); ; {
 		n, err := r.Read(p)
 		collected = append(collected, p[:n]...)
 
