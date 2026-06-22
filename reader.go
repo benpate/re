@@ -6,54 +6,74 @@ import (
 	"github.com/benpate/derp"
 )
 
-// Reader is a simple re-usable io.Reader.  It stores the entire contents of
+// Reader is a simple, re-usable io.ReadCloser. It stores the entire contents of
 // another io.Reader in memory, so it should not be used with large files.
 //
-// It implements the io.ReadCloser interface, along with a few other
-// convenience methods.
+// Unlike a one-shot reader, a Reader can be read repeatedly: each Read advances
+// an internal cursor and returns io.EOF when the content is exhausted, then the
+// cursor rewinds so the next Read cycle starts again from the beginning. This is
+// what makes the same Reader safe to hand to multiple consumers in turn.
 //
 // This is inspired by several articles, including:
 // https://blog.flexicondev.com/read-go-http-request-body-multiple-times
 type Reader struct {
-	buffer []byte
+	buffer []byte // immutable backing content; accessors and re-reads draw from this
+	pos    int    // cursor: index of the next unread byte
 }
 
-// NewReader creates a new Reader from the given io.Reader
-func NewReader(input io.Reader) (Reader, error) {
-	var err error
+// NewReader creates a new Reader by reading the given io.Reader to completion.
+func NewReader(input io.Reader) (*Reader, error) {
 
-	result := Reader{}
-
-	result.buffer, err = io.ReadAll(input)
+	buffer, err := io.ReadAll(input)
 
 	if err != nil {
-		return result, derp.Wrap(err, "re.NewReader", "Unable to read input", derp.WithInternalError())
+		return &Reader{}, derp.Wrap(err, "re.NewReader", "Unable to read input", derp.WithInternalError())
 	}
 
-	return result, nil
+	return &Reader{buffer: buffer}, nil
 }
 
-// NewReaderFromBytes creates a new Reader from the given slice of bytes
-func NewReaderFromBytes(bytes []byte) Reader {
-	return Reader{buffer: bytes}
+// NewReaderFromBytes creates a new Reader from the given slice of bytes. The
+// slice is retained, not copied, so callers must not mutate it afterward.
+func NewReaderFromBytes(buffer []byte) *Reader {
+	return &Reader{buffer: buffer}
 }
 
-// Read implements the io.Reader interface
-func (r Reader) Read(p []byte) (int, error) {
-	return copy(p, r.buffer), io.EOF
+// Read implements the io.Reader interface. It copies the next unread bytes into
+// p, advancing the cursor. When the content is exhausted it returns 0, io.EOF
+// and rewinds the cursor, so the Reader can be read again from the start.
+func (r *Reader) Read(p []byte) (int, error) {
+
+	// At end of content: signal EOF and rewind for the next read cycle.
+	if r.pos >= len(r.buffer) {
+		r.pos = 0
+		return 0, io.EOF
+	}
+
+	n := copy(p, r.buffer[r.pos:])
+	r.pos += n
+	return n, nil
 }
 
-// Close implements the io.Closer interface
-func (r Reader) Close() error {
+// Reset rewinds the cursor to the start of the content, so the next Read returns
+// the content from the beginning.
+func (r *Reader) Reset() {
+	r.pos = 0
+}
+
+// Close implements the io.Closer interface. It is a no-op (the content is held
+// in memory) and never returns an error.
+func (r *Reader) Close() error {
 	return nil
 }
 
-// Bytes returns the Reader's contents as a slice of bytes
-func (r Reader) Bytes() []byte {
+// Bytes returns the Reader's full contents, independent of the read cursor.
+func (r *Reader) Bytes() []byte {
 	return r.buffer
 }
 
-// String returns the Reader's contents as a string.
-func (r Reader) String() string {
+// String returns the Reader's full contents as a string, independent of the
+// read cursor.
+func (r *Reader) String() string {
 	return string(r.buffer)
 }

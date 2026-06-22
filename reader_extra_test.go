@@ -20,12 +20,19 @@ func TestReader_ReadIntoFullBuffer(t *testing.T) {
 
 	reader := NewReaderFromBytes([]byte("Hello World"))
 
-	// A buffer at least as large as the content reads everything in one call
+	// A buffer at least as large as the content reads everything in one call.
+	// Per the io.Reader contract, that call returns the data with a nil error;
+	// EOF arrives on the following call.
 	p := make([]byte, 11)
 	n, err := reader.Read(p)
 
 	require.Equal(t, 11, n)
 	require.Equal(t, "Hello World", string(p[:n]))
+	require.NoError(t, err)
+
+	// The next Read reports EOF (and rewinds for re-reading).
+	n, err = reader.Read(p)
+	require.Equal(t, 0, n)
 	require.ErrorIs(t, err, io.EOF)
 }
 
@@ -36,24 +43,67 @@ func TestReader_EmptyInput(t *testing.T) {
 	require.Equal(t, []byte{}, reader.Bytes())
 }
 
-// TestReader_ReadTruncatesLargeInput documents a known limitation: Reader.Read
-// always returns io.EOF, even when it only copied part of the buffer. As a
-// result, consumers like io.ReadAll that grow their buffer from a small initial
-// size only receive the first chunk of a large input. This test pins that
-// behavior so a future change (a fix) is noticed.
-func TestReader_ReadTruncatesLargeInput(t *testing.T) {
+// TestReader_ReadLargeInputViaSmallBuffer confirms that a large input is read in
+// full, in order, when consumed through a buffer smaller than the content. This
+// is the io.Reader contract that a cursor-less implementation would violate
+// (truncating to the first chunk and repeating it).
+func TestReader_ReadLargeInputViaSmallBuffer(t *testing.T) {
 
+	// Distinct, position-dependent content so any repetition or gap is detectable.
 	big := make([]byte, 5000)
+	for i := range big {
+		big[i] = byte(i % 251) // 251 is prime, so the pattern doesn't align to the buffer size
+	}
+
 	reader := NewReaderFromBytes(big)
 
-	// A small buffer only receives len(p) bytes before EOF
-	p := make([]byte, 512)
-	n, err := reader.Read(p)
+	// Drain through a 512-byte buffer; the full content must come back in order.
+	collected := drainInChunks(t, reader, 512)
+	require.Equal(t, big, collected, "small-buffer reads must reassemble the full content in order")
+}
 
-	require.Equal(t, 512, n)
-	require.ErrorIs(t, err, io.EOF)
+// TestReader_ReadAllLargeInput confirms io.ReadAll receives the entire content
+// even when it exceeds io.ReadAll's initial buffer size (512 bytes) — the exact
+// case the previous cursor-less implementation truncated.
+func TestReader_ReadAllLargeInput(t *testing.T) {
 
-	// The full content is still available through the Bytes() accessor, which
-	// does not go through the truncating Read path.
-	require.Equal(t, 5000, len(reader.Bytes()))
+	big := make([]byte, 5000)
+	for i := range big {
+		big[i] = byte(i % 251)
+	}
+
+	got, err := io.ReadAll(NewReaderFromBytes(big))
+
+	require.NoError(t, err)
+	require.Equal(t, big, got)
+}
+
+// TestReader_RereadAfterEOF confirms the cursor rewinds on EOF, so the same
+// Reader can be drained repeatedly — the type's core purpose.
+func TestReader_RereadAfterEOF(t *testing.T) {
+
+	reader := NewReaderFromBytes([]byte("Hello World"))
+
+	for i := 0; i < 3; i++ {
+		got, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		require.Equal(t, "Hello World", string(got))
+	}
+}
+
+// TestReader_Reset confirms Reset rewinds the cursor mid-stream.
+func TestReader_Reset(t *testing.T) {
+
+	reader := NewReaderFromBytes([]byte("Hello World"))
+
+	p := make([]byte, 5)
+	_, err := reader.Read(p) // consume "Hello"
+	require.NoError(t, err)
+	require.Equal(t, "Hello", string(p))
+
+	reader.Reset()
+
+	got, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.Equal(t, "Hello World", string(got), "Reset must rewind to the start")
 }

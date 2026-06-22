@@ -2,11 +2,14 @@ package re
 
 import (
 	"bytes"
+	"io"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // FuzzReaderRoundTrip confirms that a Reader faithfully preserves arbitrary
-// byte content through its accessor and full-buffer Read paths, and never
+// byte content through its accessor, chunked Read, and re-read paths, and never
 // panics.
 func FuzzReaderRoundTrip(f *testing.F) {
 
@@ -17,37 +20,48 @@ func FuzzReaderRoundTrip(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 
-		// NewReaderFromBytes: accessors must return the exact input
+		// NewReaderFromBytes: accessors must return the exact input. (bytes.Equal
+		// is used throughout so a nil and an empty slice compare equal, as they
+		// should for this content.)
 		fromBytes := NewReaderFromBytes(data)
-		if !bytes.Equal(fromBytes.Bytes(), data) {
-			t.Fatalf("Bytes() mismatch: got %d bytes, want %d", len(fromBytes.Bytes()), len(data))
-		}
-		if fromBytes.String() != string(data) {
-			t.Fatal("String() mismatch")
-		}
+		require.True(t, bytes.Equal(data, fromBytes.Bytes()), "Bytes() mismatch")
+		require.Equal(t, string(data), fromBytes.String(), "String() mismatch")
 
-		// NewReader (from an io.Reader) must capture the same content
+		// NewReader (from an io.Reader) must capture the same content.
 		fromReader, err := NewReader(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("NewReader error: %v", err)
-		}
-		if !bytes.Equal(fromReader.Bytes(), data) {
-			t.Fatal("NewReader content mismatch")
-		}
+		require.NoError(t, err)
+		require.True(t, bytes.Equal(data, fromReader.Bytes()), "NewReader content mismatch")
 
-		// A single Read into a full-size buffer returns all of the content
-		p := make([]byte, len(data))
-		n, _ := fromBytes.Read(p)
-		if n != len(data) {
-			t.Fatalf("Read returned %d bytes, want %d", n, len(data))
-		}
-		if !bytes.Equal(p, data) {
-			t.Fatal("Read content mismatch")
-		}
+		// Draining through a small buffer must reassemble the exact content, in
+		// order — the io.Reader contract a cursor-less Read breaks.
+		require.True(t, bytes.Equal(data, drainInChunks(t, fromBytes, 7)), "chunked Read mismatch")
 
-		// Close is always a no-op success
-		if err := fromBytes.Close(); err != nil {
-			t.Fatalf("Close error: %v", err)
-		}
+		// After EOF the cursor rewinds, so the Reader can be drained again.
+		again, err := io.ReadAll(fromBytes)
+		require.NoError(t, err)
+		require.True(t, bytes.Equal(data, again), "re-read content mismatch")
+
+		// Close is always a no-op success.
+		require.NoError(t, fromBytes.Close())
 	})
+}
+
+// drainInChunks reads r to EOF through a buffer of the given size, returning the
+// concatenation of every chunk. It fails the test on any non-EOF error.
+func drainInChunks(t *testing.T, r io.Reader, bufSize int) []byte {
+	t.Helper()
+
+	var collected []byte
+	p := make([]byte, bufSize)
+
+	for {
+		n, err := r.Read(p)
+		collected = append(collected, p[:n]...)
+
+		if err == io.EOF {
+			return collected
+		}
+
+		require.NoError(t, err)
+	}
 }
