@@ -8,8 +8,8 @@ import (
 	"github.com/benpate/derp"
 )
 
-// ReadRequestBody reads the response.Body then replaces
-// it with a new reader that can be read again by another process
+// ReadRequestBody reads the request.Body then replaces it with a new reader
+// that can be read again by another process.
 func ReadRequestBody(request *http.Request) ([]byte, error) {
 
 	// Request cannot be nil

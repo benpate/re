@@ -11,14 +11,19 @@ import (
 //
 // Unlike a one-shot reader, a Reader can be read repeatedly: each Read advances
 // an internal cursor and returns io.EOF when the content is exhausted, then the
-// cursor rewinds so the next Read cycle starts again from the beginning. This is
-// what makes the same Reader safe to hand to multiple consumers in turn.
+// cursor rewinds so the next Read cycle starts again from the beginning. This
+// lets one consumer read the content, then a later consumer read it again.
+//
+// A Reader is NOT safe for concurrent use: the cursor is shared mutable state,
+// so the re-reads must happen in sequence, not in parallel. To fan out to
+// concurrent consumers, give each its own Reader over the same bytes (for
+// example, NewReaderFromBytes(r.Bytes())).
 //
 // This is inspired by several articles, including:
 // https://blog.flexicondev.com/read-go-http-request-body-multiple-times
 type Reader struct {
 	buffer []byte // immutable backing content; accessors and re-reads draw from this
-	pos    int    // cursor: index of the next unread byte
+	pos    int    // cursor: index of the next unread byte (not safe for concurrent Read)
 }
 
 // NewReader creates a new Reader by reading the given io.Reader to completion.
