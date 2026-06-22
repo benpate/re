@@ -29,6 +29,43 @@ func TestReadRequestBody_NilBody(t *testing.T) {
 	require.Equal(t, []byte{}, result)
 }
 
+func TestReadResponseBody_NilResponse(t *testing.T) {
+
+	// A nil response yields an empty body and no error (no panic)
+	result, err := ReadResponseBody(nil)
+	require.NoError(t, err)
+	require.Equal(t, []byte{}, result)
+}
+
+func TestReadResponseBody_NilBody(t *testing.T) {
+
+	// A response with no body yields an empty body and no error (no panic).
+	// A nil Body is legal, e.g. on a response to a HEAD request.
+	response := &http.Response{}
+
+	result, err := ReadResponseBody(response)
+	require.NoError(t, err)
+	require.Equal(t, []byte{}, result)
+}
+
+func TestCloneResponse_NilOriginal(t *testing.T) {
+
+	// A nil original yields a zero-value response without panicking
+	require.NotPanics(t, func() {
+		clone := CloneResponse(nil)
+		require.Equal(t, http.Response{}, clone)
+	})
+}
+
+func TestCloneResponse_NilBody(t *testing.T) {
+
+	// Cloning a response with a nil body must not panic
+	require.NotPanics(t, func() {
+		clone := CloneResponse(&http.Response{StatusCode: 204})
+		require.Equal(t, 204, clone.StatusCode)
+	})
+}
+
 func TestCloneResponse(t *testing.T) {
 
 	original := &http.Response{
