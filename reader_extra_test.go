@@ -8,6 +8,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestReader_SequentialConsumers documents the supported usage: one consumer
+// reads the content to EOF, then a later consumer reads the same content again.
+// (Concurrent reads of one Reader are not supported; each consumer that needs
+// parallel access should get its own Reader over the same bytes.)
+func TestReader_SequentialConsumers(t *testing.T) {
+
+	shared := NewReaderFromBytes([]byte("shared body"))
+
+	for consumer := 0; consumer < 3; consumer++ {
+		got, err := io.ReadAll(shared)
+		require.NoError(t, err)
+		require.Equal(t, "shared body", string(got))
+	}
+}
+
 func TestNewReader_PreservesContent(t *testing.T) {
 
 	reader, err := NewReader(strings.NewReader("some content"))
