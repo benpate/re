@@ -1,4 +1,4 @@
-# re 🔖
+# re ♻️
 
 [![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](http://pkg.go.dev/github.com/benpate/re)
 [![Version](https://img.shields.io/github/v/release/benpate/re?include_prereleases&style=flat-square&color=brightgreen)](https://github.com/benpate/re/releases)
@@ -7,40 +7,42 @@
 [![Codecov](https://img.shields.io/codecov/c/github/benpate/re.svg?style=flat-square)](https://codecov.io/gh/benpate/re)
 
 ## Re-Reader for Go
-In some circumstances, it's necessary to us a Golang [io.Reader](https://pkg.go.dev/io#Reader) multiple times.  While readers themselves don't support this, we can fake it by copying the value into a buffer and then replaying the values whenever asked.
 
-**WARNING:** This library uses more resources than a regular reader.  In particular, it's a bad idea to use this for very large values (because it keeps the whole dataset in memory) or long running streaming readers (because it reads and replays the entire value).  It should only be used when the data is small and you reasonably believe you will need to use the reader a second time.
+In some circumstances, it's necessary to use a Golang [io.Reader](https://pkg.go.dev/io#Reader) multiple times. While readers themselves don't support this, we can fake it by copying the value into a buffer and then replaying the values whenever asked.
 
-However, it is useful for processing HTTP requests, particularly when multiple layers of an app all need the same access to the HTTP request body.  This happens, for example, when an [http signature](https://github.com/benpate/hannibal/tree/main/sigs) middleware needs to validate the body digest before allowing the transaction to pass through to the main handler app.
+**WARNING:** This library uses more resources than a regular reader. In particular, it's a bad idea to use this for very large values (because it keeps the whole dataset in memory) or long-running streaming readers (because it reads and replays the entire value). It should only be used when the data is small and you reasonably believe you will need to use the reader a second time.
+
+However, it is useful for processing HTTP requests, particularly when multiple layers of an app all need the same access to the HTTP request body. This happens, for example, when an [http signature](https://github.com/benpate/hannibal/tree/main/sigs) middleware needs to validate the body digest before allowing the transaction to pass through to the main handler app.
 
 ## Read from an io.Reader Multiple Times
 
-To use this library, just wrap any reader in a `re.Reader`.  This will copy all of its values into a memory buffer which can be re-read as many times as necessary.
+Wrap any reader in a `re.Reader`. This copies all of its bytes into a memory buffer that can be re-read as many times as necessary.
 
 ```go
 func main() {
-	// First, a single-use reader 
-	singleReader := strings.NewReader(("Hello World."))
+	// A single-use reader
+	singleReader := strings.NewReader("Hello World.")
 
-	// This reader will work multiple times
-	multipleReader := re.NewReader(singleReader)
+	// Wrap it so it can be read multiple times
+	multipleReader, err := re.NewReader(singleReader)
+	if err != nil {
+		panic(err)
+	}
 
-    readAndPrint(multipleReader)
-    readAndPrint(multipleReader)
-    readAndPrint(multipleReader)
+	readAndPrint(multipleReader) // Hello World.
+	readAndPrint(multipleReader) // Hello World.
+	readAndPrint(multipleReader) // Hello World.
 }
 
 func readAndPrint(r io.Reader) {
-    b, _ := io.ReadAll(r)
-    fmt.Println(string(b))
+	b, _ := io.ReadAll(r)
+	fmt.Println(string(b))
 }
-	
 ```
 
 ## Read the Body from an http.Request or http.Response
 
-This library also includes helper functions to read from [`http.Request`](https://pkg.go.dev/net/http#Request) and [`http.Response`](https://pkg.go.dev/net/http#Response) bodies. These functions do not use a re.Reader, but simply read the existing Body reader then replace it with a fresh reader that can be read again by another process.
-
+This library also includes helper functions to read from [`http.Request`](https://pkg.go.dev/net/http#Request) and [`http.Response`](https://pkg.go.dev/net/http#Response) bodies. These functions do not use a `re.Reader`, but simply read the existing Body reader then replace it with a fresh reader that can be read again by another process.
 
 ```go
 func handler(request *http.Request) {
@@ -48,6 +50,18 @@ func handler(request *http.Request) {
 }
 ```
 
+## What matters here
+
+- **`Reader.Read` advances a cursor and rewinds on EOF.** Each `Read` returns the next bytes (`n, nil`) and signals `0, io.EOF` only when the content is exhausted — at which point the cursor rewinds so the *next* read cycle starts over. This is what makes the same `Reader` re-readable. It also means re-reading depends on draining to EOF; to rewind early (mid-stream), call `Reset()`. A cursor-less implementation that returns EOF on every call silently truncates large inputs and repeats the first chunk — don't reintroduce one.
+
+- **`NewReader` and `NewReaderFromBytes` return `*Reader` (a pointer).** The cursor is mutable state, so the methods use a pointer receiver. Pass the `*Reader` around; copying the value would share the buffer but is not the intended use.
+
+- **`NewReaderFromBytes` retains the slice, it does not copy it.** Mutating the slice after the call mutates the `Reader`'s contents. Pass a slice you own, or copy first.
+
+- **The `http.Body` helpers replace the body with a fresh `NopCloser`.** `ReadRequestBody`/`ReadResponseBody` read the body to completion and swap in a re-readable reader, so downstream handlers can read it again. They guard nil request/response and nil bodies (a nil body is legal, e.g. on a HEAD response) and return an empty slice rather than panicking.
+
+- **`CloneResponse` returns `(http.Response, error)`.** It reads (and restores) the original's body to give the clone an independent copy; a failed read is returned rather than silently producing an empty clone.
+
 ## Issues and Pull Requests Welcome
 
-As is everything in life, `re` is a work in progress and will benefit from your experience reports, use cases, and contributions.  If you have an idea for making this library better, send in a pull request.  We're all in this together! 🔖
+As is everything in life, `re` is a work in progress and will benefit from your experience reports, use cases, and contributions. If you have an idea for making this library better, send in a pull request. We're all in this together! ♻️
