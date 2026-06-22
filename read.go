@@ -65,15 +65,21 @@ func ReadResponseBody(response *http.Response) ([]byte, error) {
 
 // CloneResponse makes an exact copy of a response WITHOUT closing
 // the original response body. A nil original yields a zero-value response.
-func CloneResponse(original *http.Response) http.Response {
+func CloneResponse(original *http.Response) (http.Response, error) {
 
 	// Original cannot be nil (dereferencing it below would panic).
 	if original == nil {
-		return http.Response{}
+		return http.Response{}, nil
 	}
 
 	clone := *original
-	originalBytes, _ := ReadResponseBody(original)
+
+	originalBytes, err := ReadResponseBody(original)
+
+	if err != nil {
+		return clone, derp.Wrap(err, "re.CloneResponse", "Unable to read original response body")
+	}
+
 	clone.Body = io.NopCloser(bytes.NewReader(originalBytes))
-	return clone
+	return clone, nil
 }

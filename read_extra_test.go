@@ -50,9 +50,10 @@ func TestReadResponseBody_NilBody(t *testing.T) {
 
 func TestCloneResponse_NilOriginal(t *testing.T) {
 
-	// A nil original yields a zero-value response without panicking
+	// A nil original yields a zero-value response and no error, without panicking
 	require.NotPanics(t, func() {
-		clone := CloneResponse(nil)
+		clone, err := CloneResponse(nil)
+		require.NoError(t, err)
 		require.Equal(t, http.Response{}, clone)
 	})
 }
@@ -61,9 +62,23 @@ func TestCloneResponse_NilBody(t *testing.T) {
 
 	// Cloning a response with a nil body must not panic
 	require.NotPanics(t, func() {
-		clone := CloneResponse(&http.Response{StatusCode: 204})
+		clone, err := CloneResponse(&http.Response{StatusCode: 204})
+		require.NoError(t, err)
 		require.Equal(t, 204, clone.StatusCode)
 	})
+}
+
+func TestCloneResponse_ReadError(t *testing.T) {
+
+	// When the original body cannot be read, the error is propagated rather
+	// than silently producing an empty clone.
+	original := &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(errorReader{}),
+	}
+
+	_, err := CloneResponse(original)
+	require.Error(t, err)
 }
 
 func TestCloneResponse(t *testing.T) {
@@ -74,7 +89,8 @@ func TestCloneResponse(t *testing.T) {
 		Body:       io.NopCloser(bytes.NewReader([]byte("Hello World"))),
 	}
 
-	clone := CloneResponse(original)
+	clone, err := CloneResponse(original)
+	require.NoError(t, err)
 
 	// The clone carries the same metadata
 	require.Equal(t, 200, clone.StatusCode)
@@ -98,10 +114,11 @@ func TestCloneResponse_IndependentBodies(t *testing.T) {
 		Body:       io.NopCloser(bytes.NewReader([]byte("payload"))),
 	}
 
-	clone := CloneResponse(original)
+	clone, err := CloneResponse(original)
+	require.NoError(t, err)
 
 	// Reading the clone to completion must not affect the original's reader
-	_, err := io.ReadAll(clone.Body)
+	_, err = io.ReadAll(clone.Body)
 	require.NoError(t, err)
 
 	originalBody, err := io.ReadAll(original.Body)
