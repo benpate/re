@@ -33,13 +33,13 @@ func ReadRequestBody(request *http.Request) ([]byte, error) {
 	return originalBytes, nil
 }
 
-// ReadResponseBody reads the response.Body then replaces
-// it with a new reader that can be read again by another process
-//
-// This is inspired by several articles, including:
-// https://blog.manugarri.com/how-to-reuse-http-response-body-in-golang-2/
-// https://medium.com/@xoen/golang-read-from-an-io-readwriter-without-loosing-its-content-2c6911805361
+// ReadResponseBody reads the response.Body then replaces it with a new reader
+// that can be read again by another process.
 func ReadResponseBody(response *http.Response) ([]byte, error) {
+
+	// This is inspired by several articles, including:
+	// https://blog.manugarri.com/how-to-reuse-http-response-body-in-golang-2/
+	// https://medium.com/@xoen/golang-read-from-an-io-readwriter-without-loosing-its-content-2c6911805361
 
 	// Response cannot be nil
 	if response == nil {

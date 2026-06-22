@@ -18,9 +18,6 @@ import (
 // so the re-reads must happen in sequence, not in parallel. To fan out to
 // concurrent consumers, give each its own Reader over the same bytes (for
 // example, NewReaderFromBytes(r.Bytes())).
-//
-// This is inspired by several articles, including:
-// https://blog.flexicondev.com/read-go-http-request-body-multiple-times
 type Reader struct {
 	buffer []byte // immutable backing content; accessors and re-reads draw from this
 	pos    int    // cursor: index of the next unread byte (not safe for concurrent Read)
@@ -29,6 +26,8 @@ type Reader struct {
 // NewReader creates a new Reader by reading the given io.Reader to completion.
 func NewReader(input io.Reader) (*Reader, error) {
 
+	// The re-readable-buffer approach is inspired by several articles, including:
+	// https://blog.flexicondev.com/read-go-http-request-body-multiple-times
 	buffer, err := io.ReadAll(input)
 
 	if err != nil {
