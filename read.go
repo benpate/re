@@ -41,6 +41,17 @@ func ReadRequestBody(request *http.Request) ([]byte, error) {
 // https://medium.com/@xoen/golang-read-from-an-io-readwriter-without-loosing-its-content-2c6911805361
 func ReadResponseBody(response *http.Response) ([]byte, error) {
 
+	// Response cannot be nil
+	if response == nil {
+		return []byte{}, nil
+	}
+
+	// If response.Body is nil, then return an empty byte array. A nil Body is
+	// legal (for instance, on a response to a HEAD request).
+	if response.Body == nil {
+		return []byte{}, nil
+	}
+
 	originalBytes, err := io.ReadAll(response.Body)
 
 	if err != nil {
@@ -53,8 +64,14 @@ func ReadResponseBody(response *http.Response) ([]byte, error) {
 }
 
 // CloneResponse makes an exact copy of a response WITHOUT closing
-// the original response body.
+// the original response body. A nil original yields a zero-value response.
 func CloneResponse(original *http.Response) http.Response {
+
+	// Original cannot be nil (dereferencing it below would panic).
+	if original == nil {
+		return http.Response{}
+	}
+
 	clone := *original
 	originalBytes, _ := ReadResponseBody(original)
 	clone.Body = io.NopCloser(bytes.NewReader(originalBytes))
