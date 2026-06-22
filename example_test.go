@@ -61,11 +61,9 @@ func ExampleReader_Reset() {
 // its contents returns the full content, in order, across multiple Read calls.
 func ExampleReader_Read() {
 
-	reader := re.NewReaderFromBytes([]byte("Hello World."))
-
-	// Read through a small (4-byte) buffer until EOF.
-	buffer := make([]byte, 4)
-	for {
+	// Read through a small (4-byte) buffer until EOF. The buffer is allocated
+	// once in the loop's init clause and reused across iterations.
+	for reader, buffer := re.NewReaderFromBytes([]byte("Hello World.")), make([]byte, 4); ; {
 		n, err := reader.Read(buffer)
 		fmt.Printf("%q\n", buffer[:n])
 		if err == io.EOF {
