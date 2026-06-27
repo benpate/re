@@ -86,7 +86,7 @@ func ExampleReadRequestBody() {
 	request := httptest.NewRequest("POST", "https://example.com", strings.NewReader("request payload"))
 
 	// One layer reads the body...
-	body, _ := re.ReadRequestBody(request)
+	body, _ := re.ReadRequestBody(request, re.DefaultMaximum)
 	fmt.Printf("first reader: %s\n", body)
 
 	// ...and a later layer can still read the same body.

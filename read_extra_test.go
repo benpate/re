@@ -12,7 +12,7 @@ import (
 func TestReadRequestBody_NilRequest(t *testing.T) {
 
 	// A nil request yields an empty body and no error
-	result, err := ReadRequestBody(nil)
+	result, err := ReadRequestBody(nil, DefaultMaximum)
 	require.NoError(t, err)
 	require.Equal(t, []byte{}, result)
 }
@@ -24,7 +24,7 @@ func TestReadRequestBody_NilBody(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, request.Body)
 
-	result, err := ReadRequestBody(request)
+	result, err := ReadRequestBody(request, DefaultMaximum)
 	require.NoError(t, err)
 	require.Equal(t, []byte{}, result)
 }
@@ -32,7 +32,7 @@ func TestReadRequestBody_NilBody(t *testing.T) {
 func TestReadResponseBody_NilResponse(t *testing.T) {
 
 	// A nil response yields an empty body and no error (no panic)
-	result, err := ReadResponseBody(nil)
+	result, err := ReadResponseBody(nil, DefaultMaximum)
 	require.NoError(t, err)
 	require.Equal(t, []byte{}, result)
 }
@@ -43,7 +43,7 @@ func TestReadResponseBody_NilBody(t *testing.T) {
 	// A nil Body is legal, e.g. on a response to a HEAD request.
 	response := &http.Response{}
 
-	result, err := ReadResponseBody(response)
+	result, err := ReadResponseBody(response, DefaultMaximum)
 	require.NoError(t, err)
 	require.Equal(t, []byte{}, result)
 }
@@ -52,7 +52,7 @@ func TestCloneResponse_NilOriginal(t *testing.T) {
 
 	// A nil original yields a zero-value response and no error, without panicking
 	require.NotPanics(t, func() {
-		clone, err := CloneResponse(nil)
+		clone, err := CloneResponse(nil, DefaultMaximum)
 		require.NoError(t, err)
 		require.Equal(t, http.Response{}, clone)
 	})
@@ -62,7 +62,7 @@ func TestCloneResponse_NilBody(t *testing.T) {
 
 	// Cloning a response with a nil body must not panic
 	require.NotPanics(t, func() {
-		clone, err := CloneResponse(&http.Response{StatusCode: 204})
+		clone, err := CloneResponse(&http.Response{StatusCode: 204}, DefaultMaximum)
 		require.NoError(t, err)
 		require.Equal(t, 204, clone.StatusCode)
 	})
@@ -77,7 +77,7 @@ func TestCloneResponse_ReadError(t *testing.T) {
 		Body:       io.NopCloser(errorReader{}),
 	}
 
-	_, err := CloneResponse(original)
+	_, err := CloneResponse(original, DefaultMaximum)
 	require.Error(t, err)
 }
 
@@ -89,7 +89,7 @@ func TestCloneResponse(t *testing.T) {
 		Body:       io.NopCloser(bytes.NewReader([]byte("Hello World"))),
 	}
 
-	clone, err := CloneResponse(original)
+	clone, err := CloneResponse(original, DefaultMaximum)
 	require.NoError(t, err)
 
 	// The clone carries the same metadata
@@ -114,7 +114,7 @@ func TestCloneResponse_IndependentBodies(t *testing.T) {
 		Body:       io.NopCloser(bytes.NewReader([]byte("payload"))),
 	}
 
-	clone, err := CloneResponse(original)
+	clone, err := CloneResponse(original, DefaultMaximum)
 	require.NoError(t, err)
 
 	// Reading the clone to completion must not affect the original's reader

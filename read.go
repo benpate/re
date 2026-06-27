@@ -8,9 +8,16 @@ import (
 	"github.com/benpate/derp"
 )
 
-// ReadRequestBody reads the request.Body then replaces it with a new reader
-// that can be read again by another process.
-func ReadRequestBody(request *http.Request) ([]byte, error) {
+// DefaultMaximum is a sane default body-size limit (1 MiB) for callers that have
+// no stricter requirement of their own. It is large enough for typical JSON API
+// payloads while preventing a hostile peer from forcing an unbounded allocation.
+const DefaultMaximum = int64(1 << 20)
+
+// ReadRequestBody reads the request.Body (up to maxBytes) then replaces it with a
+// new reader that can be read again by another process. If the body exceeds
+// maxBytes, it returns an error and reads nothing further, so callers never parse
+// a truncated body. Pass DefaultMaximum if you have no stricter limit.
+func ReadRequestBody(request *http.Request, maxBytes int64) ([]byte, error) {
 
 	// Request cannot be nil
 	if request == nil {
@@ -22,10 +29,11 @@ func ReadRequestBody(request *http.Request) ([]byte, error) {
 		return []byte{}, nil
 	}
 
-	originalBytes, err := io.ReadAll(request.Body)
+	// Cap the body so an oversized payload errors instead of allocating without bound.
+	originalBytes, err := io.ReadAll(http.MaxBytesReader(nil, request.Body, maxBytes))
 
 	if err != nil {
-		return []byte{}, derp.Wrap(err, "re.ReadRequestBody", "Unable to read request body", derp.WithInternalError())
+		return []byte{}, derp.Wrap(err, "re.ReadRequestBody", "Unable to read request body (or body exceeds maximum size)", maxBytes, derp.WithInternalError())
 	}
 
 	request.Body = io.NopCloser(bytes.NewReader(originalBytes))
@@ -33,9 +41,11 @@ func ReadRequestBody(request *http.Request) ([]byte, error) {
 	return originalBytes, nil
 }
 
-// ReadResponseBody reads the response.Body then replaces it with a new reader
-// that can be read again by another process.
-func ReadResponseBody(response *http.Response) ([]byte, error) {
+// ReadResponseBody reads the response.Body (up to maxBytes) then replaces it with
+// a new reader that can be read again by another process. If the body exceeds
+// maxBytes, it returns an error and reads nothing further, so callers never parse
+// a truncated body. Pass DefaultMaximum if you have no stricter limit.
+func ReadResponseBody(response *http.Response, maxBytes int64) ([]byte, error) {
 
 	// This is inspired by several articles, including:
 	// https://blog.manugarri.com/how-to-reuse-http-response-body-in-golang-2/
@@ -52,10 +62,11 @@ func ReadResponseBody(response *http.Response) ([]byte, error) {
 		return []byte{}, nil
 	}
 
-	originalBytes, err := io.ReadAll(response.Body)
+	// Cap the body so an oversized payload errors instead of allocating without bound.
+	originalBytes, err := io.ReadAll(http.MaxBytesReader(nil, response.Body, maxBytes))
 
 	if err != nil {
-		return []byte{}, derp.Wrap(err, "re.ReadResponseBody", "Unable to read response body", derp.WithInternalError())
+		return []byte{}, derp.Wrap(err, "re.ReadResponseBody", "Unable to read response body (or body exceeds maximum size)", maxBytes, derp.WithInternalError())
 	}
 
 	response.Body = io.NopCloser(bytes.NewReader(originalBytes))
@@ -63,9 +74,10 @@ func ReadResponseBody(response *http.Response) ([]byte, error) {
 	return originalBytes, nil
 }
 
-// CloneResponse makes an exact copy of a response WITHOUT closing
-// the original response body. A nil original yields a zero-value response.
-func CloneResponse(original *http.Response) (http.Response, error) {
+// CloneResponse makes an exact copy of a response (reading up to maxBytes of its
+// body) WITHOUT closing the original response body. A nil original yields a
+// zero-value response. Pass DefaultMaximum if you have no stricter limit.
+func CloneResponse(original *http.Response, maxBytes int64) (http.Response, error) {
 
 	// Original cannot be nil (dereferencing it below would panic).
 	if original == nil {
@@ -74,7 +86,7 @@ func CloneResponse(original *http.Response) (http.Response, error) {
 
 	clone := *original
 
-	originalBytes, err := ReadResponseBody(original)
+	originalBytes, err := ReadResponseBody(original, maxBytes)
 
 	if err != nil {
 		return clone, derp.Wrap(err, "re.CloneResponse", "Unable to read original response body")

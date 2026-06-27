@@ -17,13 +17,13 @@ func TestReadRequest(t *testing.T) {
 	require.Nil(t, err)
 
 	{
-		first, err := ReadRequestBody(request)
+		first, err := ReadRequestBody(request, DefaultMaximum)
 		require.Nil(t, err)
 		require.Equal(t, []byte("Hello World"), first)
 	}
 
 	{
-		second, err := ReadRequestBody(request)
+		second, err := ReadRequestBody(request, DefaultMaximum)
 		require.Nil(t, err)
 		require.Equal(t, "Hello World", string(second))
 	}
@@ -43,13 +43,13 @@ func TestReadResponse(t *testing.T) {
 	response.Body = io.NopCloser(body)
 
 	{
-		first, err := ReadResponseBody(&response)
+		first, err := ReadResponseBody(&response, DefaultMaximum)
 		require.Nil(t, err)
 		require.Equal(t, []byte("Hello World"), first)
 	}
 
 	{
-		second, err := ReadResponseBody(&response)
+		second, err := ReadResponseBody(&response, DefaultMaximum)
 		require.Nil(t, err)
 		require.Equal(t, "Hello World", string(second))
 	}
@@ -67,7 +67,7 @@ func TestReadRequest_Error(t *testing.T) {
 	request, err := http.NewRequest("GET", "https://test.com", errorReader{})
 	require.Nil(t, err)
 
-	result, err := ReadRequestBody(request)
+	result, err := ReadRequestBody(request, DefaultMaximum)
 	require.Error(t, err)
 	require.Equal(t, []byte{}, result)
 }
@@ -79,7 +79,51 @@ func TestReadResponse_Error(t *testing.T) {
 		Body: io.NopCloser(errorReader{}),
 	}
 
-	result, err := ReadResponseBody(&response)
+	result, err := ReadResponseBody(&response, DefaultMaximum)
 	require.Error(t, err)
 	require.Equal(t, []byte{}, result)
+}
+
+func TestReadRequestBody_ExceedsMaximum(t *testing.T) {
+
+	// A body larger than the limit must error and return no bytes (never a truncated body)
+	request, err := http.NewRequest("POST", "https://test.com", bytes.NewReader([]byte("Hello World")))
+	require.Nil(t, err)
+
+	result, err := ReadRequestBody(request, 5)
+	require.Error(t, err)
+	require.Equal(t, []byte{}, result)
+}
+
+func TestReadRequestBody_AtMaximum(t *testing.T) {
+
+	// A body exactly at the limit is read successfully
+	request, err := http.NewRequest("POST", "https://test.com", bytes.NewReader([]byte("Hello")))
+	require.Nil(t, err)
+
+	result, err := ReadRequestBody(request, 5)
+	require.NoError(t, err)
+	require.Equal(t, "Hello", string(result))
+}
+
+func TestReadResponseBody_ExceedsMaximum(t *testing.T) {
+
+	// A response body larger than the limit must error and return no bytes
+	response := http.Response{Body: io.NopCloser(bytes.NewReader([]byte("Hello World")))}
+
+	result, err := ReadResponseBody(&response, 5)
+	require.Error(t, err)
+	require.Equal(t, []byte{}, result)
+}
+
+func TestCloneResponse_ExceedsMaximum(t *testing.T) {
+
+	// Cloning a response whose body exceeds the limit must propagate the error
+	original := &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(bytes.NewReader([]byte("Hello World"))),
+	}
+
+	_, err := CloneResponse(original, 5)
+	require.Error(t, err)
 }
