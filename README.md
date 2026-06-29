@@ -10,13 +10,17 @@
 
 In some circumstances, it's necessary to use a Golang [io.Reader](https://pkg.go.dev/io#Reader) multiple times. While readers themselves don't support this, we can fake it by copying the value into a buffer and then replaying the values whenever asked.
 
-**WARNING:** This library uses more resources than a regular reader. In particular, it's a bad idea to use this for very large values (because it keeps the whole dataset in memory) or long-running streaming readers (because it reads and replays the entire value). It should only be used when the data is small and you reasonably believe you will need to use the reader a second time.
+This is useful for processing HTTP requests, particularly when multiple layers of an app all need the same access to the HTTP request body. This happens, for example, when an [http signature](https://github.com/benpate/hannibal/tree/main/sigs) middleware needs to validate the body digest before allowing the transaction to pass through to the main handler app.
 
-However, it is useful for processing HTTP requests, particularly when multiple layers of an app all need the same access to the HTTP request body. This happens, for example, when an [http signature](https://github.com/benpate/hannibal/tree/main/sigs) middleware needs to validate the body digest before allowing the transaction to pass through to the main handler app.
+### A Note on Memory and Limits
+
+Because `re` keeps the whole dataset in memory and replays it, it trades memory for re-readability. Don't reach for it with very large values or long-running streaming readers — only when the data is small and you reasonably expect to read it a second time.
+
+To keep that tradeoff from becoming a liability, the HTTP body helpers take a `maxBytes` limit. A body larger than the limit returns an error instead of allocating without bound or silently parsing a truncated payload, so a hostile peer can't force a runaway allocation. Pass `re.DefaultMaximum` (1 MiB — comfortable for typical JSON payloads) when you have no stricter requirement of your own.
 
 ## Read from an io.Reader Multiple Times
 
-Wrap any reader in a `re.Reader`. This copies all of its bytes into a memory buffer that can be re-read as many times as necessary.
+Wrap any reader in a `re.Reader`. This copies all of its bytes into a memory buffer that can be re-read as many times as necessary. Each `Read` cycle ends with `io.EOF` and rewinds automatically, so the next consumer starts from the beginning.
 
 ```go
 func main() {
@@ -40,15 +44,25 @@ func readAndPrint(r io.Reader) {
 }
 ```
 
+A `re.Reader` is also useful on its own, away from `io.Reader` plumbing:
+
+- `re.NewReaderFromBytes(b)` wraps a slice you already have (the slice is retained, not copied).
+- `Reset()` rewinds the cursor early, without draining to `io.EOF` first.
+- `Bytes()` and `String()` return the full contents directly, independent of the read cursor.
+
+A `Reader` is **not** safe for concurrent use — the cursor is shared mutable state. To fan out to parallel consumers, give each its own reader over the same bytes with `re.NewReaderFromBytes(r.Bytes())`.
+
 ## Read the Body from an http.Request or http.Response
 
-This library also includes helper functions to read from [`http.Request`](https://pkg.go.dev/net/http#Request) and [`http.Response`](https://pkg.go.dev/net/http#Response) bodies. These functions do not use a `re.Reader`, but simply read the existing Body reader then replace it with a fresh reader that can be read again by another process.
+This library also includes helper functions to read from [`http.Request`](https://pkg.go.dev/net/http#Request) and [`http.Response`](https://pkg.go.dev/net/http#Response) bodies. These functions do not use a `re.Reader`, but simply read the existing Body reader (up to `maxBytes`) then replace it with a fresh reader that can be read again by another process. They guard nil requests, responses, and bodies, so a nil body (legal on a HEAD response) yields an empty slice instead of a panic.
 
 ```go
 func handler(request *http.Request) {
-	body, err := re.ReadRequestBody(request)
+	body, err := re.ReadRequestBody(request, re.DefaultMaximum)
 }
 ```
+
+`re.ReadResponseBody(response, maxBytes)` does the same for a response. And `re.CloneResponse(response, maxBytes)` makes an independent copy of a response — reading and restoring the original's body so both the original and the clone remain readable.
 
 ## Issues and Pull Requests Welcome
 
