@@ -78,10 +78,11 @@ func TestReader_ReadLargeInputViaSmallBuffer(t *testing.T) {
 }
 
 // TestReader_ReadAllLargeInput confirms io.ReadAll receives the entire content
-// even when it exceeds io.ReadAll's initial buffer size (512 bytes) — the exact
-// case the previous cursor-less implementation truncated.
+// even when it exceeds io.ReadAll's initial buffer size (512 bytes).
 func TestReader_ReadAllLargeInput(t *testing.T) {
 
+	// This is the exact case a cursor-less Read truncates: io.ReadAll grows its
+	// buffer past 512 bytes only if the first Read does not report EOF.
 	big := make([]byte, 5000)
 	for i := range big {
 		big[i] = byte(i % 251)

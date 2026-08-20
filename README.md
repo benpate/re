@@ -62,7 +62,7 @@ func handler(request *http.Request) {
 }
 ```
 
-`re.ReadResponseBody(response, maxBytes)` does the same for a response. And `re.CloneResponse(response, maxBytes)` makes an independent copy of a response — reading and restoring the original's body so both the original and the clone remain readable.
+`re.ReadResponseBody(response, maxBytes)` does the same for a response. And `re.CloneResponse(response, maxBytes)` makes an independent copy of a response — reading and restoring the original's body so both the original and the clone remain readable. The clone gets its own headers and trailers too, so you can modify the copy without touching the original.
 
 ## Issues and Pull Requests Welcome
 

@@ -19,12 +19,14 @@ const DefaultMaximum = int64(1 << 20)
 // a truncated body. Pass DefaultMaximum if you have no stricter limit.
 func ReadRequestBody(request *http.Request, maxBytes int64) ([]byte, error) {
 
-	// Request cannot be nil
+	const location = "re.ReadRequestBody"
+
+	// RULE: Request cannot be nil
 	if request == nil {
 		return []byte{}, nil
 	}
 
-	// If request.Body is nil, then return an empty byte array
+	// RULE: If request.Body is nil, then return an empty byte array
 	if request.Body == nil {
 		return []byte{}, nil
 	}
@@ -33,11 +35,13 @@ func ReadRequestBody(request *http.Request, maxBytes int64) ([]byte, error) {
 	originalBytes, err := io.ReadAll(http.MaxBytesReader(nil, request.Body, maxBytes))
 
 	if err != nil {
-		return []byte{}, derp.Wrap(err, "re.ReadRequestBody", "Unable to read request body (or body exceeds maximum size)", maxBytes, derp.WithInternalError())
+		return []byte{}, derp.Wrap(err, location, "Unable to read request body (or body exceeds maximum size)", maxBytes, derp.WithInternalError())
 	}
 
+	// Put back a reader that the next layer can drain all over again.
 	request.Body = io.NopCloser(bytes.NewReader(originalBytes))
 
+	// Read it once, read it twice
 	return originalBytes, nil
 }
 
@@ -47,17 +51,19 @@ func ReadRequestBody(request *http.Request, maxBytes int64) ([]byte, error) {
 // a truncated body. Pass DefaultMaximum if you have no stricter limit.
 func ReadResponseBody(response *http.Response, maxBytes int64) ([]byte, error) {
 
+	const location = "re.ReadResponseBody"
+
 	// This is inspired by several articles, including:
 	// https://blog.manugarri.com/how-to-reuse-http-response-body-in-golang-2/
 	// https://medium.com/@xoen/golang-read-from-an-io-readwriter-without-loosing-its-content-2c6911805361
 
-	// Response cannot be nil
+	// RULE: Response cannot be nil
 	if response == nil {
 		return []byte{}, nil
 	}
 
-	// If response.Body is nil, then return an empty byte array. A nil Body is
-	// legal (for instance, on a response to a HEAD request).
+	// RULE: If response.Body is nil, then return an empty byte array. A nil Body
+	// is legal (for instance, on a response to a HEAD request).
 	if response.Body == nil {
 		return []byte{}, nil
 	}
@@ -66,32 +72,49 @@ func ReadResponseBody(response *http.Response, maxBytes int64) ([]byte, error) {
 	originalBytes, err := io.ReadAll(http.MaxBytesReader(nil, response.Body, maxBytes))
 
 	if err != nil {
-		return []byte{}, derp.Wrap(err, "re.ReadResponseBody", "Unable to read response body (or body exceeds maximum size)", maxBytes, derp.WithInternalError())
+		return []byte{}, derp.Wrap(err, location, "Unable to read response body (or body exceeds maximum size)", maxBytes, derp.WithInternalError())
 	}
 
+	// Put back a reader that the next layer can drain all over again.
 	response.Body = io.NopCloser(bytes.NewReader(originalBytes))
 
+	// Three times a lady
 	return originalBytes, nil
 }
 
-// CloneResponse makes an exact copy of a response (reading up to maxBytes of its
-// body) WITHOUT closing the original response body. A nil original yields a
-// zero-value response. Pass DefaultMaximum if you have no stricter limit.
+// CloneResponse makes an independent copy of a response (reading up to maxBytes
+// of its body) WITHOUT closing the original response body. Changing the clone's
+// body, headers, or trailers does not change the original's. A nil original
+// yields a zero-value response. Pass DefaultMaximum if you have no stricter limit.
 func CloneResponse(original *http.Response, maxBytes int64) (http.Response, error) {
 
-	// Original cannot be nil (dereferencing it below would panic).
+	const location = "re.CloneResponse"
+
+	// RULE: Original cannot be nil (dereferencing it below would panic).
 	if original == nil {
 		return http.Response{}, nil
 	}
 
+	// Copy the response, which duplicates every scalar field.
 	clone := *original
 
+	// Give the clone its own copy of each field that a struct copy would only
+	// share a reference to. Without this, a caller who sets a header on the
+	// "copy" silently rewrites the original's header too.
+	clone.Header = original.Header.Clone()
+	clone.Trailer = original.Trailer.Clone()
+	clone.TransferEncoding = append([]string(nil), original.TransferEncoding...)
+
+	// Read the original's body, which also leaves it re-readable.
 	originalBytes, err := ReadResponseBody(original, maxBytes)
 
 	if err != nil {
-		return clone, derp.Wrap(err, "re.CloneResponse", "Unable to read original response body")
+		return clone, derp.Wrap(err, location, "Unable to read original response body")
 	}
 
+	// Hand the clone its own reader over those bytes.
 	clone.Body = io.NopCloser(bytes.NewReader(originalBytes))
+
+	// An identical twin, raised apart
 	return clone, nil
 }

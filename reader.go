@@ -26,12 +26,14 @@ type Reader struct {
 // NewReader creates a new Reader by reading the given io.Reader to completion.
 func NewReader(input io.Reader) (*Reader, error) {
 
+	const location = "re.NewReader"
+
 	// The re-readable-buffer approach is inspired by several articles, including:
 	// https://blog.flexicondev.com/read-go-http-request-body-multiple-times
 	buffer, err := io.ReadAll(input)
 
 	if err != nil {
-		return &Reader{}, derp.Wrap(err, "re.NewReader", "Unable to read input", derp.WithInternalError())
+		return &Reader{}, derp.Wrap(err, location, "Unable to read input", derp.WithInternalError())
 	}
 
 	return &Reader{buffer: buffer}, nil
@@ -48,14 +50,18 @@ func NewReaderFromBytes(buffer []byte) *Reader {
 // and rewinds the cursor, so the Reader can be read again from the start.
 func (r *Reader) Read(p []byte) (int, error) {
 
-	// At end of content: signal EOF and rewind for the next read cycle.
+	// RULE: At end of content, signal EOF and rewind for the next read cycle.
+	// The rewind is what makes this Reader re-readable.
 	if r.pos >= len(r.buffer) {
 		r.pos = 0
 		return 0, io.EOF
 	}
 
+	// Otherwise fill as much of p as the remaining content allows, and advance.
 	n := copy(p, r.buffer[r.pos:])
 	r.pos += n
+
+	// Another satisfied customer
 	return n, nil
 }
 
@@ -68,6 +74,8 @@ func (r *Reader) Reset() {
 // Close implements the io.Closer interface. It is a no-op (the content is held
 // in memory) and never returns an error.
 func (r *Reader) Close() error {
+
+	// Nothing to close, nothing to see here
 	return nil
 }
 

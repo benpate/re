@@ -125,3 +125,73 @@ func TestCloneResponse_IndependentBodies(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "payload", string(originalBody))
 }
+
+func TestCloneResponse_IndependentHeaders(t *testing.T) {
+
+	// A clone must own its headers outright. A caller who copies a response in
+	// order to change it would otherwise rewrite the original's headers too.
+	original := &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": []string{"text/plain"}},
+		Body:       io.NopCloser(bytes.NewReader([]byte("Hello World"))),
+	}
+
+	clone, err := CloneResponse(original, DefaultMaximum)
+	require.NoError(t, err)
+
+	clone.Header.Set("Content-Type", "application/json")
+	clone.Header.Set("X-Added", "yes")
+
+	require.Equal(t, "text/plain", original.Header.Get("Content-Type"))
+	require.Equal(t, "", original.Header.Get("X-Added"))
+}
+
+func TestCloneResponse_IndependentTrailers(t *testing.T) {
+
+	original := &http.Response{
+		StatusCode: 200,
+		Trailer:    http.Header{"Expires": []string{"never"}},
+		Body:       io.NopCloser(bytes.NewReader([]byte("Hello World"))),
+	}
+
+	clone, err := CloneResponse(original, DefaultMaximum)
+	require.NoError(t, err)
+
+	clone.Trailer.Set("Expires", "tomorrow")
+
+	require.Equal(t, "never", original.Trailer.Get("Expires"))
+}
+
+func TestCloneResponse_IndependentTransferEncoding(t *testing.T) {
+
+	original := &http.Response{
+		StatusCode:       200,
+		TransferEncoding: []string{"chunked"},
+		Body:             io.NopCloser(bytes.NewReader([]byte("Hello World"))),
+	}
+
+	clone, err := CloneResponse(original, DefaultMaximum)
+	require.NoError(t, err)
+	require.Equal(t, []string{"chunked"}, clone.TransferEncoding)
+
+	clone.TransferEncoding[0] = "identity"
+
+	require.Equal(t, []string{"chunked"}, original.TransferEncoding)
+}
+
+func TestCloneResponse_NilHeadersStayNil(t *testing.T) {
+
+	// Copying must not invent maps that the original did not have, since a nil
+	// Header and an empty one are not the same thing to net/http.
+	original := &http.Response{
+		StatusCode: 204,
+		Body:       io.NopCloser(bytes.NewReader(nil)),
+	}
+
+	clone, err := CloneResponse(original, DefaultMaximum)
+	require.NoError(t, err)
+
+	require.Nil(t, clone.Header)
+	require.Nil(t, clone.Trailer)
+	require.Nil(t, clone.TransferEncoding)
+}
