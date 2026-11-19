@@ -3,7 +3,7 @@ module github.com/benpate/re
 go 1.27.4
 
 require (
-	github.com/benpate/derp v0.48.0
+	github.com/benpate/derp v0.50.0
 	github.com/stretchr/testify v1.12.1
 )
 
